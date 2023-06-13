@@ -8,6 +8,6 @@ flake8:
   stage: style
   script:
     - pip install --upgrade flake8==5
-    - flake8 --exclude=_version.py rtctools_diagnostics
+    - flake8 --exclude=_version.py rtctools_diagnostics --max-line-length 99
   tags:
     - docker
