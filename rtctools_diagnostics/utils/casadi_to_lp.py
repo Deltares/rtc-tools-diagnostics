@@ -37,7 +37,7 @@ def convert_constraints(constraints, lbg, ubg, b, n_dec):
         elif np.isfinite(upper):
             constraints_converted[i] = "{} <= {}".format(c_str, upper - b_i)
         else:
-            raise Exception(lower, b, constraints_converted[i])
+            raise ValueError(lower, b, constraints_converted[i])
     return constraints_converted
 
 

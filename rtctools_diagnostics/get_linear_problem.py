@@ -8,7 +8,7 @@ import numpy as np
 
 import pandas as pd
 
-from rtctools.diagnostics_utils import (
+from rtctools_diagnostics.utils.casadi_to_lp import (
     casadi_to_lp,
     convert_constraints,
     get_systems_of_equations,
@@ -34,9 +34,10 @@ def evaluate_constraints(results, nlp):
     return evaluated_g
 
 
-def print_evaluated_constraints(results, nlp, casadi_equations):
+def print_evaluated_constraints(results, nlp):
     """ Print the actual constraints, showing the actual value of each
     variable between brackets."""
+    raise NotImplementedError
 
 
 def get_lagrange_mult(results):
@@ -322,7 +323,11 @@ def get_debug_markdown_per_prio(
     return result_text
 
 
-class GetLinearProblem:
+class GetLinearProblemMixin:
+    """ By including this class in your (linear) optimization problem class,
+    the linear problem of your problem will be written to a markdown file. The
+    file will indicate which constraints/bounds are active at each particular
+    priority. """
     lam_tol = 0.1
     manual_expansion = True
 
