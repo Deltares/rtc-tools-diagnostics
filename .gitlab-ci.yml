@@ -2,6 +2,7 @@ image: python:3.9-buster
 
 stages:
   - style
+  - deploy
 
 # style
 flake8:
@@ -11,3 +12,13 @@ flake8:
     - flake8 --exclude=_version.py rtctools_diagnostics --max-line-length 99
   tags:
     - docker
+
+deploy:
+    stage: deploy
+    cache: {}
+    script:
+        - pip install -U twine
+        - python setup.py sdist
+        - twine upload -u $PYPI_USER -p $PYPI_PASSWORD dist/*
+    only:
+        - tags
