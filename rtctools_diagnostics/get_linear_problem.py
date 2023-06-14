@@ -44,6 +44,8 @@ def get_lagrange_mult(results):
     """Get the lagrange multipliers for the constraints (g) and bounds (x)"""
     lam_g = [x[0] for x in np.array(results["lam_g"])]
     lam_x = [x[0] for x in np.array(results["lam_x"])]
+    if np.isnan(lam_x).any() or np.isnan(lam_x).any():
+        raise ValueError("List of lagrange multipliers contains NaNs!!")
     return lam_g, lam_x
 
 
