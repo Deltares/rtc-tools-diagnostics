@@ -13,6 +13,7 @@ setup(
     version=versioneer.get_version(),
     maintainer='Deltares',
     author='Deltares',
+    packages=find_packages("."),
     description=DOCLINES[0],
     long_description='\n'.join(DOCLINES[2:]),
     platforms=['Windows', 'Linux', 'Mac OS-X', 'Unix'],
