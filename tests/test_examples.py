@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from unittest import TestCase
+import unittest
 
 
 class ExamplesCollection():
@@ -67,3 +68,7 @@ class TestExamples(TestCase):
                     file, folder))
 
         self.assertFalse(any(ec.errors_detected.values()))
+
+
+if __name__ == '__main__':
+    unittest.main()

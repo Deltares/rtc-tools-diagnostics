@@ -9,6 +9,7 @@ from rtctools.optimization.modelica_mixin import ModelicaMixin
 from rtctools.util import run_optimization_problem
 from rtctools_diagnostics.export_results import ExportResultsEachPriorityMixin
 
+
 class WaterLevelRangeGoal(StateGoal):
     # Applying a state goal to every time step is easily done by defining a goal
     # that inherits StateGoal. StateGoal is a helper class that uses the state
@@ -54,6 +55,7 @@ class MinimizeChangeInQpumpGoal(Goal):
     priority = 3
     # Default order is 2, but we want to be explicit
     order = 2
+
 
 # In the class, we include ExportResultsEachPriorityMixin to save the results after each priority.
 class Example(ExportResultsEachPriorityMixin, GoalProgrammingMixin, CSVMixin, ModelicaMixin,
