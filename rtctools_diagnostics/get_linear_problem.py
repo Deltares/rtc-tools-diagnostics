@@ -337,8 +337,8 @@ class GetLinearProblemMixin:
         super().__init__(**kwargs)
         self.problem_and_results_list = []
 
-    def problem_and_results(self, results, nlp, lbx, ubx, lbg, ubg, x0, priority=None):
-        super().problem_and_results(nlp, results, lbx, ubx, lbg, ubg, x0, priority)
+    def solver_finished(self, results, nlp, lbx, ubx, lbg, ubg, x0, priority=None):
+        super().solver_finished(nlp, results, lbx, ubx, lbg, ubg, x0, priority)
         expand_f_g = ca.Function("f_g", [nlp["x"]], [nlp["f"], nlp["g"]]).expand()
         casadi_equations = {}
         casadi_equations[
