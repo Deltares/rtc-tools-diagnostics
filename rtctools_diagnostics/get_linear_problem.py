@@ -25,7 +25,7 @@ def get_constraints(casadi_equations):
 
 def evaluate_constraints(results, nlp):
     """ Evaluate the constraints wrt to the optimized solution """
-    x_optimized = np.array(results["x"]).ravel()
+    x_optimized = results["x_ravel"]
     X_sx = ca.SX.sym("X", *nlp["x"].shape)
     expand_fg = ca.Function("f_g", [nlp["x"]], [nlp["f"], nlp["g"]]).expand()
     _f_sx, g_sx = expand_fg(X_sx)
@@ -131,7 +131,7 @@ def get_variables_in_active_constr(results, nlp, casadi_equations, lam_tol):
         lbx,
         ubx,
         variable_names,
-        np.array(results["x"]).ravel(),
+        results["x_ravel"],
         lam_x,
     )
     lower_bound_variable_hits = find_variable_hits(
@@ -139,7 +139,7 @@ def get_variables_in_active_constr(results, nlp, casadi_equations, lam_tol):
         lbx,
         ubx,
         variable_names,
-        np.array(results["x"]).ravel(),
+        results["x_ravel"],
         lam_x,
     )
     upper_bound_dict = convert_to_dict_per_var(upper_bound_variable_hits)
@@ -337,8 +337,9 @@ class GetLinearProblemMixin:
         super().__init__(**kwargs)
         self.problem_and_results_list = []
 
-    def solver_finished(self, results, nlp, lbx, ubx, lbg, ubg, x0, priority=None):
-        super().solver_finished(nlp, results, lbx, ubx, lbg, ubg, x0, priority)
+    def priority_completed(self, priority):
+        super().priority_completed(priority)
+        lbx, ubx, lbg, ubg, x0, nlp = self.transcribed_problem.values()
         expand_f_g = ca.Function("f_g", [nlp["x"]], [nlp["f"], nlp["g"]]).expand()
         casadi_equations = {}
         casadi_equations[
@@ -346,6 +347,9 @@ class GetLinearProblemMixin:
         ] = self._CollocatedIntegratedOptimizationProblem__indices
         casadi_equations["func"] = expand_f_g
         casadi_equations["other"] = (lbx, ubx, lbg, ubg, x0)
+        lam_g, lam_x = self.lagrange_multipliers
+        x_ravel = self.solver_output
+        results = {"lam_g": lam_g, "lam_x": lam_x, "x_ravel": x_ravel}
         self.problem_and_results_list.append((priority, results, nlp, casadi_equations))
 
     def post(self):
