@@ -19,7 +19,11 @@ def convert_constraints(constraints, lbg, ubg, b, n_dec):
     constraints_converted = copy.deepcopy(constraints)
     for i, _ in enumerate(constraints_converted):
         cur_constr = constraints_converted[i]
-        lower, upper, b_i = round(lbg[i], n_dec), round(ubg[i], n_dec), round(b[i], n_dec)
+        lower, upper, b_i = (
+            round(lbg[i], n_dec),
+            round(ubg[i], n_dec),
+            round(b[i], n_dec),
+        )
 
         if len(cur_constr) > 0:
             if cur_constr[0] == "-":
@@ -140,9 +144,7 @@ def casadi_to_lp(casadi_equations, lp_name=None):
         if lp_name:
             with open("myproblem_{}.lp".format(lp_name), "w") as o:
                 o.write("Minimize\n")
-                for x in textwrap.wrap(
-                    objective_str, width=255
-                ):  # lp-format has max length of 255 chars
+                for x in textwrap.wrap(objective_str, width=255):  # lp-format has max length of 255 chars
                     o.write(x + "\n")
                 o.write("Subject To\n")
                 o.write(constraints_str + "\n")
