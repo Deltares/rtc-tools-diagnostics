@@ -24,7 +24,7 @@ class ExportResultsEachPriorityMixin:
         # Move all output files to a priority-specific folder
         num_len = 3
         subfolder_name = "priority_{:0{}}".format(priority, num_len)
-        if self.csv_ensemble_mode:
+        if getattr(self, "csv_ensemble_mode", False):
             ensemble = np.genfromtxt(
                 os.path.join(self._input_folder, self.csv_ensemble_basename + ".csv"),
                 delimiter=",",
