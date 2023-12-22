@@ -14,8 +14,9 @@ def convert_constraints(constraints, lbg, ubg, b, n_dec):
     # lbg = np.array(ca.veccat(*lbg))[:, 0]
     # ubg = np.array(ca.veccat(*ubg))[:, 0]
     b = np.array(b)[:, 0]
-    lbg = np.array(lbg)
-    ubg = np.array(ubg)
+    ca.veccat(*lbg)
+    lbg = np.array(ca.veccat(*lbg))[:, 0]
+    ubg = np.array(ca.veccat(*ubg))[:, 0]
     constraints_converted = copy.deepcopy(constraints)
     for i, _ in enumerate(constraints_converted):
         cur_constr = constraints_converted[i]
@@ -53,9 +54,6 @@ def get_varnames(casadi_equations):
     for k, v in indices.items():
         if isinstance(v, int):
             var_names.append("{}__{}".format(k, v))
-        elif isinstance(v, np.ndarray):
-            for i in np.arange(0, len(v)):
-                var_names.append("{}__{}".format(k, i))
         else:
             for i in range(0, v.stop - v.start, 1 if v.step is None else v.step):
                 var_names.append("{}__{}".format(k, i))
