@@ -17,7 +17,7 @@ setup(
     description=DOCLINES[0],
     long_description="\n".join(DOCLINES[2:]),
     platforms=["Windows", "Linux", "Mac OS-X", "Unix"],
-    install_requires=["rtc-tools >= 2.5.0", "tabulate", "casadi", "numpy", "pandas"],
+    install_requires=["rtc-tools >= 2.5.0", "tabulate", "casadi != 3.6.6", "numpy", "pandas"],
     tests_require=["pytest", "pytest-runner"],
     python_requires=">=3.5",
     cmdclass=versioneer.get_cmdclass(),
