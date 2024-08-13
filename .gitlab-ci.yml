@@ -12,8 +12,7 @@ flake8:
   script:
     - pip install --upgrade flake8==5
     - flake8 --exclude=_version.py rtctools_diagnostics --max-line-length 120
-  tags:
-    - docker
+
 
 build:
   stage: build
@@ -23,8 +22,6 @@ build:
     paths:
       - dist/
     expire_in: 1 week
-  tags:
-    - docker
 
 unittest:
   stage: test
