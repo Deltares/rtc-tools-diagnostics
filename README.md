@@ -16,6 +16,8 @@ from rtctools_diagnostics.export_results import ExportResultsEachPriorityMixin
 ```
 and add the `ExportResultsEachPriorityMixin` to you optimization problem class, before the other rtc-tools classes and mixins included in optimization problem class.
 
+You can disable this functionality by setting the class variable `export_results_each_priority` to `False` from your optimization problem class.
+
 ### Get optimization problem formulation and active constraints
 By using the `GetLinearProblemMixin`, you can generate a file that indicates the active constraints and bounds for each priority. To utilize this functionality, import the mixin as follows:
 ```python
