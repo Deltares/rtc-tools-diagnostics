@@ -44,8 +44,8 @@ def get_lagrange_mult(results):
     """Get the lagrange multipliers for the constraints (g) and bounds (x)"""
     lam_g = [x[0] for x in np.array(results["lam_g"])]
     lam_x = [x[0] for x in np.array(results["lam_x"])]
-    if np.isnan(lam_x).any() or np.isnan(lam_x).any():
-        raise ValueError("List of lagrange multipliers contains NaNs!!")
+    # if np.isnan(lam_x).any() or np.isnan(lam_x).any():
+    #     raise ValueError("List of lagrange multipliers contains NaNs!!")
     return lam_g, lam_x
 
 
@@ -157,6 +157,61 @@ def get_variables_in_active_constr(results, nlp, casadi_equations, lam_tol):
         upper_constraint_dict,
         lower_constraint_dict,
     )
+
+
+def _get_variables_in_constr(nlp, casadi_equations):
+    """ "
+    This function determines all constraints/bounds and extracts the
+    variables that are in those constraints/bounds. It returns dictionaries
+    with keys indicating the variable and with values the timestep(s) at which
+    that variable is involved in a constraint/bound.
+    """
+    constraints = get_constraints(casadi_equations)
+    lbx, ubx, lbg, ubg, _x0 = casadi_equations["other"]
+    variable_names = get_varnames(casadi_equations)
+
+    # Upper and lower bounds
+    lam_x_larger_than_zero, lam_x_smaller_than_zero = get_tol_exceedance(lam_x, lam_tol)
+    upper_bound_variable_hits = find_variable_hits(
+        lam_x_larger_than_zero,
+        lbx,
+        ubx,
+        variable_names,
+        results["x_ravel"],
+        lam_x,
+    )
+    lower_bound_variable_hits = find_variable_hits(
+        lam_x_smaller_than_zero,
+        lbx,
+        ubx,
+        variable_names,
+        results["x_ravel"],
+        lam_x,
+    )
+    upper_bound_dict = convert_to_dict_per_var(upper_bound_variable_hits)
+    lower_bound_dict = convert_to_dict_per_var(lower_bound_variable_hits)
+
+    # Upper and lower constraints
+    lam_g_larger_than_zero, lam_g_smaller_than_zero = get_tol_exceedance(lam_g, lam_tol)
+
+    evaluated_g = evaluate_constraints(results, nlp)
+    upper_constraint_variable_hits = find_variable_hits(
+        lam_g_larger_than_zero, lbg, ubg, constraints, evaluated_g, lam_g
+    )
+    lower_constraint_variable_hits = find_variable_hits(
+        lam_g_smaller_than_zero, lbg, ubg, constraints, evaluated_g, lam_g
+    )
+    upper_constraint_dict = convert_to_dict_per_var(upper_constraint_variable_hits)
+    lower_constraint_dict = convert_to_dict_per_var(lower_constraint_variable_hits)
+
+    return (
+        upper_bound_dict,
+        lower_bound_dict,
+        upper_constraint_dict,
+        lower_constraint_dict,
+    )
+
+
 
 
 def get_active_constraints(results, casadi_equations, lam_tol=0.1, n_dec=4):
@@ -369,3 +424,52 @@ class GetLinearProblemMixin:
 
         with open(os.path.join(self._output_folder, "active_constraints.md"), "w") as f:
             f.write(result_text)
+
+
+class ExtractLPMixin:
+    """
+    This class is only compatible with linear programming problems.
+    Inheriting this class results in generating an LP file expressing the model 
+    that is passed to the solver. For each priority, a separate LP file is generated.
+
+    Inheriting this class requires a call to `super().priority_completed(prioriy)`
+    and `super().post()` in your model.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.problem_list = []
+    
+    def _extract_problem(self):
+        lbx, ubx, lbg, ubg, x0, nlp = self.transcribed_problem.values()
+        expand_f_g = ca.Function("f_g", [nlp["x"]], [nlp["f"], nlp["g"]]).expand()
+        casadi_equations = {}
+        casadi_equations["indices"] = self._CollocatedIntegratedOptimizationProblem__indices
+        casadi_equations["func"] = expand_f_g
+        casadi_equations["other"] = (lbx, ubx, lbg, ubg, x0)
+        return nlp, casadi_equations
+
+    def priority_completed(self, priority):
+        super().priority_completed(priority)
+        nlp, casadi_equations = self._extract_problem()
+        self.problem_list.append((priority, nlp, casadi_equations))
+
+    def post(self):
+        super().post()
+
+        if len(self.problem_list) == 0:
+            nlp, casadi_equations = self._extract_problem()
+            self.problem_list.append((0, nlp, casadi_equations))
+
+        for problem in self.problem_list:
+            priority, nlp, casadi_equations = problem
+            constraints = get_constraints(casadi_equations)
+            lbx, ubx, lbg, ubg, _x0 = casadi_equations["other"]
+            variable_names = get_varnames(casadi_equations)
+            
+            result_text = ""
+            for i, variable_name in enumerate(variable_names):
+                result_text += "{} <= {} <= {}\n".format(lbx[i], variable_name, ubx[i])
+
+            with open(os.path.join(self._output_folder, "model_priority_{}.lp".format(priority)), "w") as f:
+                f.write(result_text)
+
