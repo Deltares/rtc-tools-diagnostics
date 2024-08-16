@@ -1,12 +1,10 @@
 import copy
 import logging
 import os
-
 import casadi as ca
-
 import numpy as np
-
 import pandas as pd
+import textwrap
 
 from rtctools_diagnostics.utils.casadi_to_lp import (
     casadi_to_lp,
@@ -435,6 +433,8 @@ class ExtractLPMixin:
     Inheriting this class requires a call to `super().priority_completed(prioriy)`
     and `super().post()` in your model.
     """
+    current_priority = 0
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.problem_list = []
@@ -446,30 +446,171 @@ class ExtractLPMixin:
         casadi_equations["indices"] = self._CollocatedIntegratedOptimizationProblem__indices
         casadi_equations["func"] = expand_f_g
         casadi_equations["other"] = (lbx, ubx, lbg, ubg, x0)
-        return nlp, casadi_equations
+        return casadi_equations
+
+    def _write_lp(casadi_equations):
+        priority = 1
+        
 
     def priority_completed(self, priority):
         super().priority_completed(priority)
-        nlp, casadi_equations = self._extract_problem()
-        self.problem_list.append((priority, nlp, casadi_equations))
+        casadi_equations = self._extract_problem()
+        self.problem_list.append((priority, casadi_equations))
 
     def post(self):
         super().post()
 
         if len(self.problem_list) == 0:
-            nlp, casadi_equations = self._extract_problem()
-            self.problem_list.append((0, nlp, casadi_equations))
+            casadi_equations = self._extract_problem()
+            self.problem_list.append((0, casadi_equations))
 
         for problem in self.problem_list:
-            priority, nlp, casadi_equations = problem
-            constraints = get_constraints(casadi_equations)
-            lbx, ubx, lbg, ubg, _x0 = casadi_equations["other"]
-            variable_names = get_varnames(casadi_equations)
-            
-            result_text = ""
-            for i, variable_name in enumerate(variable_names):
-                result_text += "{} <= {} <= {}\n".format(lbx[i], variable_name, ubx[i])
+            priority, casadi_equations = problem
+            indices = casadi_equations['indices'][0]
+            expand_f_g = casadi_equations['func']
+            lbx, ubx, lbg, ubg, x0 = casadi_equations['other']
+            X = ca.SX.sym('X', expand_f_g.nnz_in())
+            f, g = expand_f_g(X)
 
-            with open(os.path.join(self._output_folder, "model_priority_{}.lp".format(priority)), "w") as f:
-                f.write(result_text)
+            in_var = X
+            f = []
+            for o in [f, g]:
+                Af = ca.Function('Af', [in_var], [ca.jacobian(o, in_var)])
+                bf = ca.Function('bf', [in_var], [o])
+
+                A = Af(0)
+                A = ca.sparsify(A)
+
+                b = bf(0)
+                b = ca.sparsify(b)
+                f.append((A, b))
+
+            var_names = []
+            for k, v in indices.items():
+                if isinstance(v, int):
+                    var_names.append('{}__{}'.format(k, v))
+                elif isinstance(v, slice):
+                    for i in range(0, v.stop - v.start, 1 if v.step is None else v.step):
+                        var_names.append('{}__{}'.format(k, i))
+                else:
+                    for i in range(0, v[-1] - v[0]):#, 1 if v.step is None else v.step):
+                        var_names.append('{}__{}'.format(k, i))
+
+            n_derivatives = expand_f_g.nnz_in() - len(var_names)
+            for i in range(n_derivatives):
+                var_names.append("DERIVATIVE__{}".format(i))
+
+            # CPLEX does not like [] in variable names
+            for i, v in enumerate(var_names):
+                v = v.replace("[", "_I")
+                v = v.replace("]", "I_")
+                var_names[i] = v
+
+            # OBJECTIVE
+            A, b = f[0]
+            objective = []
+            ind = np.array(A)[0, :]
+
+            for v, c in zip(var_names, ind):
+                if c != 0:
+                    objective.extend(['+' if c > 0 else '-', str(abs(c)), v])
+            if len(objective) == 0:
+                objective.append("Unknown")
+            elif len(objective) >= 2 and objective[0] == "-":
+                objective[1] = "-" + objective[1]
+
+            objective.pop(0)
+            objective_str = " ".join(objective)
+            objective_str = "  " + objective_str
+
+            # CONSTRAINTS
+            A, b = f[1]
+            ca.veccat(*lbg)
+            lbg = np.array(ca.veccat(*lbg))[:, 0]
+            ubg = np.array(ca.veccat(*ubg))[:, 0]
+
+            A_csc = A.tocsc()
+            A_coo = A_csc.tocoo()
+            b = np.array(b)[:, 0]
+
+            constraints = [[] for i in range(A.shape[0])]
+
+            for i, j, c in zip(A_coo.row, A_coo.col, A_coo.data):
+                constraints[i].extend(['+' if c > 0 else '-', str(abs(c)), var_names[j]])
+
+            for i in range(len(constraints)):
+                cur_constr = constraints[i]
+                l, u, b_i = lbg[i], ubg[i], b[i]
+
+                if len(cur_constr) > 0:
+                    if cur_constr[0] == "-":
+                        cur_constr[1] = "-" + cur_constr[1]
+                    cur_constr.pop(0)
+
+                c_str = " ".join(cur_constr)
+
+                if np.isfinite(l) and np.isfinite(u) and l == u:
+                    constraints[i] = "{} = {}".format(c_str, l - b_i)
+                elif np.isfinite(l) and np.isfinite(u):
+                    constraints[i] = "{} <= {} <= {}".format(l - b_i, c_str, u - b_i)
+                elif np.isfinite(l):
+                    constraints[i] = "{} >= {}".format(c_str, l - b_i)
+                elif np.isfinite(u):
+                    constraints[i] = "{} <= {}".format(c_str, u - b_i)
+                else:
+                    raise Exception(l, b, constraints[i])
+
+            constraints_str = "  " + "\n  ".join(constraints)
+
+            # Bounds
+            bounds = []
+            for v, l, u in zip(var_names, lbx, ubx):
+                bounds.append("{} <= {} <= {}".format(l, v, u))
+            bounds_str = "  " + "\n  ".join(bounds)
+
+            with open(os.path.join(self._output_folder, "model_for_priority_{}.lp".format(priority), 'w')) as f:
+                f.write("Minimize\n")
+                for x in textwrap.wrap(objective_str, width=255):  # lp-format has max length of 255 chars
+                    f.write(x + "\n")
+                    f.write("Subject To\n")
+                    f.write(constraints_str + "\n")
+                    f.write("Bounds\n")
+                    f.write(bounds_str + "\n")
+                if 'discrete' in casadi_equations.keys():
+                    expand_discrete = casadi_equations['discrete'] # an array of booleans, in the same order as the variable names
+                    if any(expand_discrete):
+                        f.write("General\n")
+                        whitespace_separated_discrete_var_names = ""
+                        for i in range(len(var_names)):
+                            if expand_discrete[i]:
+                                whitespace_separated_discrete_var_names+=var_names[i]
+                                whitespace_separated_discrete_var_names+=" "
+                        f.write(whitespace_separated_discrete_var_names + "\n")
+                f.write("End")
+
+            # result_text = ""
+            # # registering constraints with their bounds
+            # result_text += "Subject To\n"
+            # for i, constraint in enumerate(constraints):
+            #     constraint_str = ""
+            #     for item in constraint:
+            #         constraint_str += item + " "
+            #     result_text += "  c{}: {} <= {} <= {}\n".format(i, lbg[i], constraint_str, ubg[i])
+            # # registering variables with their bounds
+            # result_text += "Bounds\n"
+            # for i, variable_name in enumerate(variable_names):
+            #     if ubx[i] == np.inf:
+            #         if lbx[i] == -np.inf:
+            #             result_text += "  {} free\n".format(variable_name)
+            #         elif lbx[i] == 0:
+            #             continue # no need to mention in the LP file, as the default bound for any variable is between 0 and infinity.
+            #     elif lbx[i] == 0:
+            #         result_text += "  {} <= {}\n".format(variable_name, ubx[i])
+            #     else:
+            #         result_text += "  {} <= {} <= {}\n".format(lbx[i], variable_name, ubx[i])
+            
+            # result_text += "End"
+
+            # with open(os.path.join(self._output_folder, "model_priority_{}.lp".format(priority)), "w") as f:
+            #     f.write(result_text)
 
