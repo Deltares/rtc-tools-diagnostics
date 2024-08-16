@@ -473,7 +473,7 @@ class ExtractLPMixin:
             f, g = expand_f_g(X)
 
             in_var = X
-            f = []
+            out = []
             for o in [f, g]:
                 Af = ca.Function('Af', [in_var], [ca.jacobian(o, in_var)])
                 bf = ca.Function('bf', [in_var], [o])
@@ -483,7 +483,7 @@ class ExtractLPMixin:
 
                 b = bf(0)
                 b = ca.sparsify(b)
-                f.append((A, b))
+                out.append((A, b))
 
             var_names = []
             for k, v in indices.items():
@@ -501,22 +501,22 @@ class ExtractLPMixin:
                 var_names.append("DERIVATIVE__{}".format(i))
 
             # CPLEX does not like [] in variable names
+            import re
             for i, v in enumerate(var_names):
                 v = v.replace("[", "_I")
                 v = v.replace("]", "I_")
                 var_names[i] = v
 
             # OBJECTIVE
-            A, b = f[0]
+            A, b = out[0]
             objective = []
             ind = np.array(A)[0, :]
 
             for v, c in zip(var_names, ind):
                 if c != 0:
                     objective.extend(['+' if c > 0 else '-', str(abs(c)), v])
-            if len(objective) == 0:
-                objective.append("Unknown")
-            elif len(objective) >= 2 and objective[0] == "-":
+
+            if objective[0] == "-":
                 objective[1] = "-" + objective[1]
 
             objective.pop(0)
@@ -524,10 +524,11 @@ class ExtractLPMixin:
             objective_str = "  " + objective_str
 
             # CONSTRAINTS
-            A, b = f[1]
+            A, b = out[1]
             ca.veccat(*lbg)
             lbg = np.array(ca.veccat(*lbg))[:, 0]
             ubg = np.array(ca.veccat(*ubg))[:, 0]
+
 
             A_csc = A.tocsc()
             A_coo = A_csc.tocoo()
@@ -559,7 +560,6 @@ class ExtractLPMixin:
                     constraints[i] = "{} <= {}".format(c_str, u - b_i)
                 else:
                     raise Exception(l, b, constraints[i])
-
             constraints_str = "  " + "\n  ".join(constraints)
 
             # Bounds
@@ -568,14 +568,14 @@ class ExtractLPMixin:
                 bounds.append("{} <= {} <= {}".format(l, v, u))
             bounds_str = "  " + "\n  ".join(bounds)
 
-            with open(os.path.join(self._output_folder, "model_for_priority_{}.lp".format(priority), 'w')) as f:
+            with open(os.path.join(self._output_folder, "model_for_priority_{}.lp".format(priority)), 'w') as f:
                 f.write("Minimize\n")
                 for x in textwrap.wrap(objective_str, width=255):  # lp-format has max length of 255 chars
                     f.write(x + "\n")
-                    f.write("Subject To\n")
-                    f.write(constraints_str + "\n")
-                    f.write("Bounds\n")
-                    f.write(bounds_str + "\n")
+                f.write("Subject To\n")
+                f.write(constraints_str + "\n")
+                f.write("Bounds\n")
+                f.write(bounds_str + "\n")
                 if 'discrete' in casadi_equations.keys():
                     expand_discrete = casadi_equations['discrete'] # an array of booleans, in the same order as the variable names
                     if any(expand_discrete):
