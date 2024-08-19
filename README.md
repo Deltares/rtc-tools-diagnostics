@@ -27,3 +27,17 @@ Then, add the `GetLinearProblemMixin` to your optimization problem class, before
 
 #### Notes
 - MIP and non-linear problems are not supported (yet) by `GetLinearProblemMixin`.
+
+### Save LP file of the optimization model
+
+If an RTC-Tools model inherits from `ExtractLPMixin`, an LP file is generated and stored in the output folder, representing the optimization model that is passed to the solver. For each priority, a separate LP file is created.
+
+To use this functionality, first import it as follows:
+
+```python
+from rtctools_diagnostics.get_linear_problem import ExtractLPMixin
+```
+Then, inherit from `ExtractLPMixin`. Note that this class should come before any other mixin class in your inheritance list.
+
+#### Notes
+- Non-linear problems are not supported (yet) by `ExtractLPMixin`.
