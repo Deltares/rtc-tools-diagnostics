@@ -1,6 +1,6 @@
 # rtc-tools-diagnostics
 
-This is rtc-tools-diagnostics, a toolbox to analyse results from [rtc-tools](https://gitlab.com/deltares/rtc-tools).
+This is rtc-tools-diagnostics, a toolbox to analyse results from [rtc-tools](https://github.com/Deltares/rtc-tools).
 
 ## Install
 
